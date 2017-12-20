@@ -1,0 +1,45 @@
+
+//main service call
+namespace Ghc.Utility
+{
+   public static class DataTool
+    {
+        public static List<MemberPlan> GetMemberPlanID(string memberID)
+        {
+            return UtilityDataLayer.GetMemberPlanID(memberID);          
+        }
+	}
+}      
+
+//Class
+   public class MemberPlan
+        {
+            public string MemberNumber { get; set; }
+            public decimal PlanID { get; set; }
+            public string PlanName { get; set; }
+        }
+
+//call to database by patient id to return members, as they could have multiple PLAN_ID's and PLAN_NAMES'
+	  public static List<MemberPlan> GetMemberPlanID(string PAT_MRN_ID)
+            {
+//custom component to pull development or production database based on machine executing the code. This can be overwritten. 
+                GHCDataAccessLayer dataLayer = GHCDataAccessLayerFactory.GetDataAccessLayer(DataProviderType.Sql, DATABASE);
+
+                string sql = "fw.dbo.proc_GetMemberPlanID";
+
+                SqlParameter[] sqlParams =
+                {
+                    new SqlParameter("@PAT_MRN_ID", SqlDbType.VarChar) { Value = PAT_MRN_ID }
+                };
+
+                DataTable dt = dataLayer.ExecuteDataSet(sql, CommandType.StoredProcedure, 0, sqlParams).Tables[0];
+
+                var members = dt.AsEnumerable().Select(dr => new MemberPlan
+                {
+                    MemberNumber = dr.Field<string>("MEMBER_NUMBER"),
+                    PlanID = dr.Field<decimal>("PLAN_ID"),
+                    PlanName = dr.Field<string>("PLAN_NAME")
+                }).ToList();
+                               
+                return members;
+            }

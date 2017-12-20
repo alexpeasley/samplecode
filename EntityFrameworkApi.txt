@@ -1,0 +1,103 @@
+  //.net core configure services for startup.cs adds all middleware and dependencies to your project. 
+ public void ConfigureServices(IServiceCollection services)
+        {
+
+            var pathToDoc = Configuration["Swagger:FileName"];
+            services.Configure<IISOptions>(options => options.AutomaticAuthentication = true);
+            services.AddDbContext<PharmacyRebateContext>(options => options.UseSqlServer(Configuration.GetConnectionString("PBMDatabase")));
+            services.AddScoped<IRebatesRepository, RebatesRepository>();
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("ViewRebatePortalData", policy => policy.RequireRole(@"GHC-HMO\App_Rebate_Portal_Reviewer", @"GHC-HMO\App_Rebate_Portal_Editor"));
+                options.AddPolicy("EditRebatePortalData", policy => policy.RequireRole(@"GHC-HMO\App_Rebate_Portal_Editor"));
+            });
+            services.AddMvcCore()
+                .AddApiExplorer()
+                .AddRazorViewEngine()
+                .AddJsonFormatters();
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new Info
+                {
+                    Version = "v1",
+                    Title = "Pharmacy Rebate Portal  API",
+                    Description = "Pharmacy Rebate Portal ASP.NET Core Web API",
+                    TermsOfService = "None",
+                    Contact = new Contact { Name = "Alex Peasley", Email = "alex.peasley@ghcscw.com" }
+
+                });
+            });
+
+        }
+		//api get to retreive data
+		
+		 [HttpGet("api/rebates")]
+        public IActionResult GetRebates()
+        {
+            try
+            {
+                var results = _repository.GetAllRebates();
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to get all Rebates: {ex}");
+                return BadRequest("Error occured");
+            }
+
+
+        }
+		//repository method that takes multiple dbcontext models, perfoms some linq and creates a new Model for UI purposes. 
+ public IEnumerable<PharmacyDataViewModel> GetAllRebates()
+        {
+   
+            var rebateSearch = from reb in _context.PharmacyRebate
+                               join p in _context.Product on reb.ProductId equals p.ProductId into rebates
+                               from c in rebates.DefaultIfEmpty()
+                               select new PharmacyDataViewModel
+                               {
+                                   ProductId = c.ProductId,
+                                   NdcNumber = c.NdcNumber,
+                                   RunQuarter = reb.RunQuarter,
+                                   SubmittedEstimatedRebate = reb.SubmittedEstimatedRebate,
+                                   RebateQuantity = reb.Quantity,
+                                   
+                               };
+
+            return rebateSearch;
+        }
+		
+		
+		
+//rest api call that needs to authorized before the post will run. This app runs angular 1.6 on top of MVC/Entity Framework for updates and deletes. 
+  [Authorize(Policy = "EditRebatePortalData")]
+        [HttpPost("api/products/")]
+        public async Task<IActionResult> CreateProduct([FromBody]Product product)
+        {
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    int quarterNumber = (DateTime.Now.Month - 1) / 3 + 1;
+                    DateTime firstDayOfQuarter = new DateTime(DateTime.Now.Year, (quarterNumber - 1) * 3 + 1, 1);
+                    product.EffectiveDate = firstDayOfQuarter;
+                    product.CreatedDate = DateTime.Now;
+                    product.TermDate = Convert.ToDateTime("12/31/2999");
+                    _context.Add(product);
+
+                    if (await _repository.SaveChangesAsync())
+                    {
+                        return Ok(true);
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Failed to create the Product:{ex}");
+                }
+
+
+            }
+
+            return BadRequest("Failed to Create a Product in the Database");
+        }

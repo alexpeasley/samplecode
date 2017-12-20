@@ -1,0 +1,270 @@
+//productController.js
+//Main controller that frames returns and populates the product/productDisplay arrays
+//Functions/api calls to populate other data sets as well. This ties to the MVC Rest Api that was displayed before
+(function () {
+    "use strict";
+    //Getting existing Module
+    angular.module("pharmacyRebateApp.controllers")
+        .controller("productController", productController)
+
+    productController.$inject = ["$http", "$resource", "$modal", "$scope","arrayService"];
+
+    function productController($http, $resource, $modal, $scope,arrayService) {
+        var vm = this;
+        var modalInstance = null;
+        vm.product = [];
+        vm.productDisplay = [];
+
+        vm.getProducts = function () {
+            $http.get("/api/products")
+                .then(function (response) {
+                    //success
+                    angular.copy(response.data, vm.product);
+                    vm.productDisplay = vm.product;
+                }, function () {
+                    //failure
+
+                });
+        };
+        vm.getProducts();
+        vm.itemsByPage = 60;
+       
+        vm.initializeFilters = function () {
+            $scope.drugTier = arrayService.getDrugTier();
+            $scope.newProductIndicator = arrayService.getNewProductIndicator();
+            $scope.postPatentIndicator = arrayService.getPostPatentIndicator();
+            $scope.activeFlag = arrayService.getActiveFlag();
+              
+        };
+        vm.initializeFilters();
+
+        $scope.clearFilters = function () {
+            $scope.postPatentIndicator = null;
+            $scope.newProductIndicator = null;
+            $scope.drugTier = null;
+            $scope.activeFlag = null;
+            vm.initializeFilters();
+        };
+
+       
+        var Api = $resource('/api/products/:productId');
+        var ApiManufacturer = $resource('/api/manufacturers/:manufacturerId');
+        var ApiProductName = $resource('/api/productName/:productNameId');
+
+        vm.addProduct = function () {
+            modalInstance = $modal.open({
+                animation: false,
+                templateUrl: '/Scripts/app/views/add_product.html',
+                controller: 'productAddController',
+                scope: $scope,
+                size: '',
+                resolve: {
+                }
+            });
+
+        }
+
+        vm.viewProduct = function (id) {
+            if (id > 1) {
+                Api.get({ productId: id }, function (response) {
+                    modalInstance = $modal.open({
+                        animation: false,
+                        templateUrl: '/Scripts/app/views/view_product.html',
+                        controller: 'productViewController',
+                        scope: $scope,
+                        size: '',
+                        resolve: {
+                            product: function () {
+                                return response;
+                            }
+                        }
+                    });
+                });
+
+            }
+        }
+
+        vm.updateProduct = function (id) {
+            if (id > 0) {
+                Api.get({ productId: id }, function (response) {
+                    modalInstance = $modal.open({
+                        animation: false,
+                        templateUrl: '/Scripts/app/views/update_product.html',
+                        controller: 'productUpdateController',
+                        scope: $scope,
+                        size: 'lg',
+                        resolve: {
+                            product: function () {
+                                return response;
+                            },
+                            Api: function () {
+                                return Api;
+                            }
+                        }
+                    });
+                });
+            }
+
+        }
+        vm.addProductName = function () {
+            modalInstance = $modal.open({
+                animation: false,
+                templateUrl: '/Scripts/app/views/add_productName.html',
+                controller: 'productNameAddController',
+                scope: $scope,
+                size: '',
+                resolve: {
+                }
+            });
+
+
+        }
+
+
+        vm.updateProductName = function (id) {
+            if (id > 0) {
+                ApiProductName.get({ productNameId: id }, function (response) {
+                    modalInstance = $modal.open({
+                        animation: false,
+                        templateUrl: '/Scripts/app/views/update_productName.html',
+                        controller: 'productNameUpdateController',
+                        scope: $scope,
+                        size: 'lg',
+                        resolve: {
+                            productName: function () {
+                                return response;
+                            },
+                            Api: function () {
+                                return Api;
+                            }
+                        }
+                    });
+                });
+            }
+
+        }
+
+
+        vm.deleteProduct = function (id) {
+            if (confirm('Are you sure you want to delete this?')) {
+                $http.delete("/api/products/" + id)
+                    .then(function (response) {
+                        console.log(response);
+                        $scope.Message = 'Product was successfully deleted';
+                    });
+            }
+
+        }
+
+
+        vm.updateManufacturer = function (id) {
+            if (id > 0) {
+                ApiManufacturer.get({ manufacturerId: id }, function (response) {
+                    modalInstance = $modal.open({
+                        animation: false,
+                        templateUrl: '/Scripts/app/views/update_manufacturer.html',
+                        controller: 'manufacturerUpdateController',
+                        scope: $scope,
+                        size: '',
+                        resolve: {
+                            manufacturer: function () {
+                                return response;
+                            },
+                            Api: function () {
+                                return Api;
+                            }
+                        }
+                    });
+                });
+            }
+
+        }
+    }
+})();
+
+
+
+
+//Getting existing Module
+//Simple controller that opens a modal to allow a user to update the manufacturer
+var app = angular.module('pharmacyRebateApp.controllers');
+app.controller('manufacturerAddController', ['$scope', '$http', '$modalInstance', '$window',
+    function ($scope, $http, $modalInstance, $window) {
+
+     
+        var modalInstance = null;
+        $scope.manufacturer = {};
+
+        $scope.createManufacturer = function () {
+            if (!angular.isDefined($scope.manufacturer.manufacturerName) || $scope.manufacturer.manufacturerName === '') {
+                alert('Manufacturer name is empty');
+                return;
+            }
+             else {
+
+                console.log($scope.manufacturer);
+            }
+
+            $scope.saveRecord($scope.manufacturer);
+        };
+
+        $scope.cancelModal = function () {
+            $modalInstance.dismiss('cancel');
+        };
+
+        $scope.saveRecord = function (params) {
+            //console.log(params);
+            $http.post("/api/manufacturers/", params)
+                .then(function (response) {
+                    console.log(response);
+                    $scope.Message = 'Manufacturer ' + response.config.data.manufacturerName + ' was successfully created';
+                    $scope.cancelModal();
+                    $window.location.href = '/app/manufacturer';
+                }, function (error) {
+                    $scope.Message = 'Manufacturer Name: ' + error.config.data.manufacturerName + ' is a duplicate and cannot be created';
+                });
+        }
+
+        //TODO Set Timeout
+        //$scope.setTimeout = setTimeout(function () {
+        //    $('add-modal-user-views').modal('hide')
+        //}, 4000);
+
+    }]);
+	
+	
+	
+	// the end result html using the objects that have been created before
+	<!DOCTYPE html>
+<html>
+<head>
+    <title>view_product</title>
+</head>
+<body>
+    <div class="clearfix">
+        <div class="modal-header model-grey-color">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close" ng-click="cancelModal()"><span aria-hidden="true">×</span></button>
+            <h4 class="modal-title">Product : {{product.productName}}</h4>
+        </div>
+        <div class="modal-body">
+            <dl class="dl-horizontal">
+                <dt>Product Name</dt>
+                <dd>{{product.productName}}</dd>
+                <dt>NDC Number</dt>
+                <dd>{{product.ndcNumber}}</dd>
+                <dt>Effective Date</dt>
+                <dd>{{product.effectiveDate|date:'MM/dd/yyyy'}}</dd>
+                <dt>Term Date</dt>
+                <dd>{{product.termDate|date:'MM/dd/yyyy'}}</dd>
+                <dt>Product Note</dt>
+                <dd>{{product.productNote}}</dd>
+            </dl>
+
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-default" ng-click="editProduct(product.productId)"> Edit</button>
+            <button class="btn btn-danger" ng-click="cancelModal()"><i class="fa fa-close"></i> Close</button>
+        </div>
+    </div>
+</body>
+</html>
